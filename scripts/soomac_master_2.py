@@ -107,7 +107,7 @@ class FSM:
             rospy.loginfo("All tasks completed.")
 
 def callback(data):
-    rospy.loginfo('subscribed - object pos(%.2f %.2f %.2f) ori(%.2f %.2f %.2f %.2f)', *data.data)
+    rospy.loginfo('subscribed - object initial pos (%.2f %.2f %.2f) ori(%.2f %.2f %.2f %.2f), goal pos (%.2f %.2f %.2f) ori(%.2f %.2f %.2f %.2f)', *data.data)
     soomac_fsm.update(data.data)
 
 def main():
