@@ -64,7 +64,8 @@ class chain:
     return self.angles
    
 def calc_ik(init_position, goal_position) : 
-    arm = chain()
+    arm = chain() 
+    # calc_ik 함수 불러올때마다 클래스 새로 정의하기 때문에 나중에 수정 필요! main 함수에서 미리 클래서 정의해두기
 
     arm.angle_i = arm.IK(target_position=init_position)
     arm.angle_f = arm.IK(target_position=goal_position)
