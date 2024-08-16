@@ -63,7 +63,7 @@ class chain:
 
     return self.angles
    
-def calc_ik(goal_position) : 
+def calc_ik(init_position, goal_position) : 
     arm = chain()
 
     arm.angle_i = arm.IK(target_position=init_position)
