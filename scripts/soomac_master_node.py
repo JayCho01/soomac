@@ -6,38 +6,10 @@ from std_msgs.msg import Bool
 from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
 
-#####################################################################################################################################################################################
-# Method about quatanian
+# Robot configuration parameter
 
 def dtr(dgree):
    return dgree*(np.pi/180)
-
-def quat_from_angle_axis(angle, axis):
-    axis = np.array(axis)
-    axis = axis / np.linalg.norm(axis)  # Normalize the axis
-    half_angle = angle / 2.0
-    sin_half_angle = np.sin(half_angle)
-    
-    w = np.cos(half_angle)
-    x = axis[0] * sin_half_angle
-    y = axis[1] * sin_half_angle
-    z = axis[2] * sin_half_angle
-    
-    return np.array([w, x, y, z])
-
-def quat_mul(q1, q2):
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
-    
-    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-    
-    return np.array([w, x, y, z])
-
-#####################################################################################################################################################################################
-# Robot configuration parameter
 
 l = [67, 45, 338, 281, 82, 60]
 
