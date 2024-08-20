@@ -7,7 +7,7 @@ import numpy as np
 class pub_node():
     def __init__(self):
         rospy.init_node('pub_test', anonymous=True)
-        self.pos = np.array([100, 100, 100, 30, 200, 200, 200, 50])
+        self.pos = np.array([100, 100, 100, 30, 5, 200, 200, 200, 50])
         self.main()
 
     def main(self):
