@@ -25,7 +25,7 @@ class MakeChain:
     def __init__(self):
         self.make_chain()
 
-    def Make_URDF(self, link_name, d, a, al,th=0):
+    def Make_URDF(self, link_name, d, a, al, th=0):
         return URDFLink(
             name = link_name,
             origin_translation=[a, 0, d], 
@@ -113,13 +113,13 @@ class FSM:
 
     def update(self):
         
-##########################################################################################################
+        # 초기화
         if self.state == "init_pos":            
             self.pub_pos(self.init_pos)
             print('update done to init_pos')
             print('######################################################################################')
             
-##########################################################################################################
+        # pick 
         if self.state == "pick_above":
             self.pub_pos(self.pick_above)
             print('update done to pick_above')
@@ -144,7 +144,7 @@ class FSM:
             print("update done to pick_lift")
             print('######################################################################################')
             
-##########################################################################################################
+        # place
         if self.state == "place_above":
             self.pub_pos(self.place_above)
             print("update done to place_above")
@@ -164,6 +164,7 @@ class FSM:
             self.pub_pos(self.place_lift)
             print("update done to place_lift")
             print('######################################################################################')
+
 
 ############################################################################################################################################################################
 
@@ -185,18 +186,27 @@ class FSM:
             print('나중 동작 : ', self.state)
             self.update()
 
-    def pub_pos(self, goal_pose): #publish 좌표 + 손목 각도
-        goal_msg = fl() # 통신 메세지 자료형 설정
-        self.goal_degree = self.arm.IK(goal_pose[:3])
+    def pub_pos(self, goal_pose, option = 0): #publish 좌표 + 손목 각도
 
-        self.goal_degree = np.r_[self.goal_degree, goal_pose[3]] # 3차원 좌표 + 손목 각도
+        if option == 0 : #IK 계산
+            self.goal_degree = self.arm.IK(goal_pose[:3])
+            self.goal_degree = np.r_[self.goal_degree, goal_pose[3]]
+
+        elif option == 1 : #사진 촬영 Pose
+            self.goal_degree = [90, 90, 90, 90]
+
+        elif option == 2 : #거치대 Pose
+            self.goal_degree = [50, 50, 50, 50]
+
+        goal_msg = fl() 
         goal_msg.data = np.r_[self.start_degree, self.goal_degree]
-        
         self.pub_goal_pose.publish(goal_msg)
         rospy.loginfo('goal : pos(%.2f %.2f %.2f) ori(%.2f deg)', *goal_pose)
         rospy.loginfo('start degree / axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)', *self.start_degree)
-        rospy.loginfo('goal degree / axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)', *self.goal_degree)
+        rospy.loginfo('goal  degree / axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)', *self.goal_degree)
+
         self.start_degree = self.goal_degree
+            
 
     def pub_grip(self, grip_state): #publish gripper on/off
         grip_msg = Bool()
@@ -221,7 +231,7 @@ class Callback:
         rospy.Subscriber('task_type', str, self.task_type)
         rospy.Subscriber('state_done', Bool, self.state_done)
         rospy.Subscriber('impact_feedback', Bool, self.impact) # 구현 예정
-        
+
         rospy.spin()
 
 
