@@ -78,6 +78,11 @@ class FSM:
         self.start_degree = np.r_[self.start_degree, self.parking[3]]
         #print(self.start_degree)
 
+        # 초기 위치
+        self.pick_pos = np.array([0, 0, 0, 0])
+        self.place_pos = np.array([0, 0, 0, 0])
+        self.action_setting()
+
         ############################################################
         # action 정의
         self.action_list =["parking", "init_pos", # 고정된 위치 동작
@@ -142,12 +147,13 @@ class FSM:
             print("update done to place_above")
 
         elif self.state == "place_grip":
-            #self.pub_pos(self.place_grip)
+            self.pub_pos(self.place_grip)
             print("update done to place_grip")
 
         elif self.state == "grip_off":
             self.gripper_state = False
             self.pub_grip(self.gripper_state)
+            print("update done to grip_off")
 
         elif self.state == "place_lift":
             self.pub_pos(self.place_lift)
@@ -159,19 +165,19 @@ class FSM:
     def new_state(self):
         #  state 변수를 다음 state로 변경
         current_state_index = self.action_list.index(self.state)
-        print('기존 동작: ', self.state, '동작 번호', current_state_index)
+        print('current state:', self.state, '(index:', current_state_index,')')
 
         if current_state_index == self.action_num-1: # place_offset(마지막)인 경우
             print("Pick and place 완료")
             self.last_state = self.state
             self.state = self.action_list[1] # init_pos로 이동
-            print('나중 동작 : ', self.state)
+            print('-- next state:', self.state)
             self.update()
 
         else :
             self.last_state = self.state
             self.state = self.action_list[current_state_index+1]
-            print('나중 동작 : ', self.state)
+            print('-- next state:', self.state)
             self.update()
 
     def pub_pos(self, goal_pose, option = 0): #publish 좌표 + 손목 각도
@@ -189,9 +195,10 @@ class FSM:
         goal_msg = fl() 
         goal_msg.data = np.r_[self.start_degree, self.goal_degree]
         self.pub_goal_pose.publish(goal_msg)
-        rospy.loginfo('goal : pos(%.2f %.2f %.2f) ori(%.2f deg)', *goal_pose)
-        rospy.loginfo('start degree / axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)', *self.start_degree)
-        rospy.loginfo('goal  degree / axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)', *self.goal_degree)
+        print('---- goal pos(%.2f %.2f %.2f)' % (goal_pose[0], goal_pose[1], goal_pose[2]))
+        print('---- start axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)' % (self.start_degree[0], self.start_degree[1], self.start_degree[2], self.start_degree[3], self.start_degree[4]))
+        print('---- goal  axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)' % (self.goal_degree[0], self.goal_degree[1], self.goal_degree[2], self.goal_degree[3], self.goal_degree[4]))
+
 
         self.start_degree = self.goal_degree
             
@@ -200,7 +207,7 @@ class FSM:
         grip_msg = Bool()
         grip_msg.data = grip_state
         self.pub_grip_state.publish(grip_msg)
-        rospy.loginfo(grip_state)
+        print('grip state: ',grip_state)
 
     def impact_feedback(self): #미완성
         rospy.loginfo('subscribed - impact detected! going back to last state')
@@ -242,7 +249,7 @@ class Callback:
     
             
     def state_done(self, data):
-        rospy.loginfo('state_done')
+        print('state_done\n')
         self.soomac_fsm.new_state()
         
     def impact(self, data):
