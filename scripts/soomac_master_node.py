@@ -6,6 +6,7 @@ from std_msgs.msg import Bool
 import matplotlib.pyplot as plt
 from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
+
 #####################################################################################################################################################################################
 # method
 def dtr(dgree):
@@ -44,7 +45,7 @@ a = [0, 0, l[2], l[3], l[4]+l[5]]
 al = [0, dtr(90), 0, 0, dtr(90)]
 #####################################################################################################################################################################################
 # ikpy
-class chain:
+class Chain:
     def __init__(self):
         self.make_chain()
 
@@ -72,12 +73,7 @@ class chain:
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로.
         self.angles = np.round(np.rad2deg(angle), 3)
         self.angles = self.angles[1:5]
-        #print(self.angles)
-        # ax = plt.figure().add_subplot(111, projection='3d')
-        # plt.xlabel('x')
-        # plt.ylabel('y')
-        # self.arm.plot(angle, ax) # there are 6-Links, but only 4-links has a DOF
-        # plt.show()
+        # print(self.angles)
         return self.angles
    
 #####################################################################################################################################################################################   
@@ -89,7 +85,7 @@ class FSM:
         self.gripper_state = False
         self.state = "parking"
         self.last_state = "parking"
-        self.arm = chain()
+        self.arm = Chain()
 
         # 고정된 위치
         self.parking = np.array([0, 200, 400, 0])
@@ -119,7 +115,6 @@ class FSM:
         grab_quat = quat_from_angle_axis(grab_angle, grab_axis)
         self.obj_grab_quat = quat_mul(grab_quat, self.hand_down_quat)
         ###########################################################
-
         # ROS
         self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10)
         self.pub_grip_state = rospy.Publisher('grip_state', Bool, queue_size=10)
@@ -144,12 +139,13 @@ class FSM:
         self.new_state()
 
     def update(self):
-
+############################################################################################################################################################################
         if self.state == "init_pos":            
             self.pub_pos(self.init_pos)
             print('update done to init_pos')
             print('######################################################################################')
             
+############################################################################################################################################################################
         if self.state == "pick_above":
             self.pub_pos(self.pick_above)
             print('update done to pick_above')
@@ -173,7 +169,7 @@ class FSM:
             self.pub_pos(self.pick_lift)
             print("update done to pick_lift")
             print('######################################################################################')
-
+############################################################################################################################################################################
         if self.state == "place_above":
             self.pub_pos(self.place_above)
             print("update done to place_above")
@@ -193,7 +189,7 @@ class FSM:
             self.pub_pos(self.place_lift)
             print("update done to place_lift")
             print('######################################################################################')
-
+############################################################################################################################################################################
 
     def new_state(self):
         ##  state 변수를 다음 state로 변경
@@ -243,15 +239,17 @@ class callback:
         self.soomac_fsm = FSM()
         self.ros_sub()
 
-    def ros_sub(self):
-        rospy.Subscriber('vision', fl, self.vision) 
-        rospy.Subscriber('gui_start', Bool, self.gui_start)
-        rospy.Subscriber('gui_stop', Bool, self.gui_stop)
-        rospy.Subscriber('state_done', Bool, self.state_done)
+    def ros_sub(self): # 3개로 축소, vision, gui, state_done, Impact_feedback  # gui는 string으로
+        rospy.Subscriber('vision', fl, self.vision)         
 
-        ##########구현중##########
-        # rospy.Subscriber('impact_feedback', Bool, soomac_fsm.impact_feedback)
-        # rospy.Subscriber('task_type', fl, soomac_fsm.new_state)
+        rospy.Subscriber('gui_start', Bool, self.gui_start)
+        rospy.Subscriber('gui_init_pos', Bool, self.gui_init_pos)
+        rospy.Subscriber('gui_stop', Bool, self.gui_stop)
+        rospy.Subscriber('gui_pause', Bool, self.gui_pause)
+
+        rospy.Subscriber('state_done', Bool, self.state_done)
+        
+        rospy.Subscriber('impact_feedback', Bool, self.impact) # 구현 예정
         rospy.spin()
 
     def vision(self, data):
@@ -262,20 +260,26 @@ class callback:
     def gui_start(self, data):
         rospy.loginfo('gui_start topic is subed')
         self.soomac_fsm.new_state()
-        #rospy.loginfo('subscribed - object initial pos(%.2f %.2f %.2f) ori(%.2f deg), goal pos(%.2f %.2f %.2f) ori(%.2f deg)', *data.data)
-        #soomac_fsm.update(data.data)
 
     def gui_stop(self, data):
         rospy.loginfo('gui_stop topic is subed')
-        #rospy.loginfo('subscribed - object initial pos(%.2f %.2f %.2f) ori(%.2f deg), goal pos(%.2f %.2f %.2f) ori(%.2f deg)', *data.data)
-        #soomac_fsm.update(data.data)
+        ######기능 추가######
 
+    def gui_pause(self, data):
+        rospy.loginfo('gui_pause topic is subed')
+        ######기능 추가######
+
+    def gui_init_pos(self, data):
+        rospy.loginfo('gui_init_pos topic is subed')
+        ######기능 추가######
+        #     
     def state_done(self, data):
         rospy.loginfo('state_done')
         self.soomac_fsm.new_state()
-
+        
     def impact(self, data):
-        rospy.loginfo('#제작중#')
+        rospy.loginfo('impact topic is subed')
+        ######기능 추가######
 
 #####################################################################################################################################################################################
 # main
