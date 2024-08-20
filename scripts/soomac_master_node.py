@@ -3,12 +3,12 @@ import numpy as np
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool
 
-import matplotlib.pyplot as plt
 from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
 
 #####################################################################################################################################################################################
-# method
+# Method about quatanian
+
 def dtr(dgree):
    return dgree*(np.pi/180)
 
@@ -37,14 +37,16 @@ def quat_mul(q1, q2):
     return np.array([w, x, y, z])
 
 #####################################################################################################################################################################################
-# 로봇 파라미터
+# Robot configuration parameter
+
 l = [67, 45, 338, 281, 82, 60]
 
 d = [l[0], l[1], 0, 0, 0]
 a = [0, 0, l[2], l[3], l[4]+l[5]]
 al = [0, dtr(90), 0, 0, dtr(90)]
+
 #####################################################################################################################################################################################
-# ikpy
+# Ikpy
 class Chain:
     def __init__(self):
         self.make_chain()
@@ -100,6 +102,7 @@ class FSM:
         self.start_degree = self.arm.IK(self.parking[:3])
         self.start_degree = np.r_[self.start_degree, self.parking[3]]
         #print(self.start_degree)
+
         ############################################################
         # action 정의
         self.action_list =["parking", "init_pos", # 고정된 위치 동작
@@ -114,6 +117,7 @@ class FSM:
         grab_axis = [0, 0, 1]
         grab_quat = quat_from_angle_axis(grab_angle, grab_axis)
         self.obj_grab_quat = quat_mul(grab_quat, self.hand_down_quat)
+
         ###########################################################
         # ROS
         self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10)
@@ -121,6 +125,7 @@ class FSM:
     
     def action_setting(self): # vision으로 부터 각 동작 지점의 좌표 정보 제작
         ## 각 동작 별 위치 계산
+
         # pick zone
         self.pick_above = self.pick_pos + self.above_offset 
         self.pick_grip = self.pick_pos + self.grip_offset
@@ -139,13 +144,14 @@ class FSM:
         self.new_state()
 
     def update(self):
-############################################################################################################################################################################
+        
+##########################################################################################################
         if self.state == "init_pos":            
             self.pub_pos(self.init_pos)
             print('update done to init_pos')
             print('######################################################################################')
             
-############################################################################################################################################################################
+##########################################################################################################
         if self.state == "pick_above":
             self.pub_pos(self.pick_above)
             print('update done to pick_above')
@@ -169,7 +175,8 @@ class FSM:
             self.pub_pos(self.pick_lift)
             print("update done to pick_lift")
             print('######################################################################################')
-############################################################################################################################################################################
+            
+##########################################################################################################
         if self.state == "place_above":
             self.pub_pos(self.place_above)
             print("update done to place_above")
@@ -189,10 +196,11 @@ class FSM:
             self.pub_pos(self.place_lift)
             print("update done to place_lift")
             print('######################################################################################')
+
 ############################################################################################################################################################################
 
     def new_state(self):
-        ##  state 변수를 다음 state로 변경
+        #  state 변수를 다음 state로 변경
         current_state_index = self.action_list.index(self.state)
         print('기존 동작: ', self.state, '동작 번호', current_state_index)
 
@@ -234,7 +242,7 @@ class FSM:
         self.update(self._current_obj_pose)
         rospy.loginfo('freeze for 10s')
 
-class callback:
+class Callback:
     def __init__(self):
         self.soomac_fsm = FSM()
         self.ros_sub()
@@ -285,14 +293,12 @@ class callback:
 # main
 def main():
     rospy.init_node('master', anonymous=True)
-    callback()
+    Callback()
 
-#####################################################################################################################################################################################
 
 if __name__ == '__main__':
     try:
         rospy.logwarn("Master Node is on")
-        print('######################################################################################')
         main()
 
     except rospy.ROSInterruptException:
