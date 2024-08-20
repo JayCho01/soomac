@@ -205,12 +205,15 @@ include_directories(
 # catkin_add_nosetests(test)
 
 catkin_install_python(PROGRAMS
+  scripts/ik_angle_3.py
+  scripts/pick_and_place_6.py
+  scripts/soomac_ik.py
   scripts/soomac_master.py
   scripts/soomac_master_1.py
   scripts/soomac_master_2.py
+  scripts/soomac_master_node.py
   scripts/vision_1.py
-  scripts/pick_and_place_6.py
-  scripts/ik_angle_3.py
-  scripts/soomac_master_2.py
+  scripts/pub_test.py
+  scripts/motor_control.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

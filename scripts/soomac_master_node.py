@@ -2,6 +2,7 @@ import rospy
 import numpy as np
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool
+from std_msgs.msg import String
 from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
 
@@ -47,7 +48,7 @@ class MakeChain:
         angle = self.arm.inverse_kinematics(target_position, target_orientation=[0, 0, -1], orientation_mode="X") #, target_orientation=[0, 0, -1], orientation_mode="X")
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
         self.angles = np.round(np.rad2deg(angle), 3)
-        self.angles = self.angles[1:5]
+        self.angles = self.angles[1:5] #[0,n,n,n,n,0]
         # print(self.angles)
         return self.angles
    
@@ -92,7 +93,7 @@ class FSM:
     
     def action_setting(self): # vision으로 부터 각 동작 지점의 좌표 정보 제작
         ## 각 동작 별 위치 계산
-
+        
         # pick zone
         self.pick_above = self.pick_pos + self.above_offset 
         self.pick_grip = self.pick_pos + self.grip_offset
@@ -104,9 +105,9 @@ class FSM:
         self.place_lift = self.place_pos + self.lift_offset
 
     def get_data_from_vision(self,data): # vision으로 부터 받은 데이터(3개의 위치, 1개의 손목 각도) 가공
-        vision_Data = data
-        self.pick_pos = np.array(list(vision_Data[:4]))
-        self.place_pos = np.array(list(vision_Data[4:]))
+        vision_data = data
+        self.pick_pos = np.array(list(vision_data[:4]))
+        self.place_pos = np.array(list(vision_data[4:]))
         self.action_setting()
         self.new_state()
 
@@ -214,7 +215,7 @@ class Callback:
 
     def ros_sub(self):
         rospy.Subscriber('vision', fl, self.vision)         
-        rospy.Subscriber('task_type', str, self.task_type)
+        rospy.Subscriber('task_type', String, self.task_type)
         rospy.Subscriber('state_done', Bool, self.state_done)
         rospy.Subscriber('impact_feedback', Bool, self.impact) # 구현 예정
         rospy.spin()
