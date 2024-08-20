@@ -2,10 +2,8 @@ import rospy
 import numpy as np
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool
-
 from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
-
 
 #####################################################################################################################################################################################
 # Robot configuration parameter
@@ -33,7 +31,7 @@ class MakeChain:
             rotation=[0, 0, 1],
         )
     
-  # 4-DOF robot arm define
+    #4-DOF robot arm define
     def make_chain(self): 
             self.arm = Chain(name='arm', links=[
             OriginLink(), # base
@@ -44,7 +42,7 @@ class MakeChain:
             self.Make_URDF('link5', d[4], a[4], al[4])],
             active_links_mask=[False, True, True, True, True, False] )
 
-  # IK 계산 매서드 / position -> angle(4개 축)
+    #IK 계산 매서드 / position -> angle(4개 축)
     def IK(self, target_position):
         angle = self.arm.inverse_kinematics(target_position, target_orientation=[0, 0, -1], orientation_mode="X") #, target_orientation=[0, 0, -1], orientation_mode="X")
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
@@ -67,6 +65,7 @@ class FSM:
         # 고정된 위치
         self.parking = np.array([0, 200, 400, 0])
         self.init_pos = np.array([200, 0, 300, 0])
+        self.camera_pose = np.array([200, 0, 300, 0])
         
         # offset 관련 parameter
         self.above_offset = np.array([0, 0, 100, 0])
@@ -117,70 +116,58 @@ class FSM:
         if self.state == "init_pos":            
             self.pub_pos(self.init_pos)
             print('update done to init_pos')
-            print('######################################################################################')
             
         # pick 
-        if self.state == "pick_above":
+        elif self.state == "pick_above":
             self.pub_pos(self.pick_above)
-            print('update done to pick_above')
-            print('######################################################################################')
-            
+            print('update done to pick_above')            
 
-        if self.state == "pick_grip":
+        elif self.state == "pick_grip":
             self.pub_pos(self.pick_grip)
             print('update done to pick_grip')
-            print('######################################################################################')
 
-
-        if self.state == "grip_on":
+        elif self.state == "grip_on":
             self.gripper_state = True
             self.pub_grip(self.gripper_state)
             print("update done to grip_on")
-            print('######################################################################################')
 
-
-        if self.state == "pick_lift":
+        elif self.state == "pick_lift":
             self.pub_pos(self.pick_lift)
             print("update done to pick_lift")
-            print('######################################################################################')
             
         # place
-        if self.state == "place_above":
+        elif self.state == "place_above":
             self.pub_pos(self.place_above)
             print("update done to place_above")
-            print('######################################################################################')
 
-        if self.state == "place_grip":
+        elif self.state == "place_grip":
             #self.pub_pos(self.place_grip)
             print("update done to place_grip")
-            print('######################################################################################')
 
-        if self.state == "grip_off":
+        elif self.state == "grip_off":
             self.gripper_state = False
             self.pub_grip(self.gripper_state)
-            print('######################################################################################')
 
-        if self.state == "place_lift":
+        elif self.state == "place_lift":
             self.pub_pos(self.place_lift)
             print("update done to place_lift")
-            print('######################################################################################')
 
 
-############################################################################################################################################################################
+    ######################################################################################################
 
     def new_state(self):
         #  state 변수를 다음 state로 변경
         current_state_index = self.action_list.index(self.state)
         print('기존 동작: ', self.state, '동작 번호', current_state_index)
 
-        if current_state_index == self.action_num-1: # "place_offset"인 경우
+        if current_state_index == self.action_num-1: # place_offset(마지막)인 경우
             print("Pick and place 완료")
             self.last_state = self.state
             self.state = self.action_list[1] # init_pos로 이동
             print('나중 동작 : ', self.state)
             self.update()
 
-        elif current_state_index != self.action_num:
+        else :
             self.last_state = self.state
             self.state = self.action_list[current_state_index+1]
             print('나중 동작 : ', self.state)
@@ -193,10 +180,10 @@ class FSM:
             self.goal_degree = np.r_[self.goal_degree, goal_pose[3]]
 
         elif option == 1 : #사진 촬영 Pose
-            self.goal_degree = [90, 90, 90, 90]
+            self.goal_degree = self.camera_pose
 
         elif option == 2 : #거치대 Pose
-            self.goal_degree = [50, 50, 50, 50]
+            self.goal_degree = self.parking
 
         goal_msg = fl() 
         goal_msg.data = np.r_[self.start_degree, self.goal_degree]
@@ -225,15 +212,12 @@ class Callback:
         self.soomac_fsm = FSM()
         self.ros_sub()
 
-    def ros_sub(self): # 3개로 축소, vision, gui, state_done, Impact_feedback  # gui는 string으로
-
+    def ros_sub(self):
         rospy.Subscriber('vision', fl, self.vision)         
         rospy.Subscriber('task_type', str, self.task_type)
         rospy.Subscriber('state_done', Bool, self.state_done)
         rospy.Subscriber('impact_feedback', Bool, self.impact) # 구현 예정
-
         rospy.spin()
-
 
     def vision(self, data):
         rospy.loginfo('vision topic is subed')
@@ -268,7 +252,6 @@ class Callback:
 def main():
     rospy.init_node('master', anonymous=True)
     Callback()
-
 
 if __name__ == '__main__':
     try:
