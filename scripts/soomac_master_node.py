@@ -1,5 +1,6 @@
 import rospy
 import numpy as np
+import math
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool
 from std_msgs.msg import String
@@ -44,12 +45,17 @@ class MakeChain:
             active_links_mask=[False, True, True, True, True, False] )
 
     #IK 계산 매서드 / position -> angle(4개 축)
-    def IK(self, target_position):
-        angle = self.arm.inverse_kinematics(target_position, target_orientation=[0, 0, -1], orientation_mode="X") #, target_orientation=[0, 0, -1], orientation_mode="X")
+    def IK(self, target_pose):
+        angle = self.arm.inverse_kinematics(target_pose[:3], target_orientation=[0, 0, -1], orientation_mode="X") #, target_orientation=[0, 0, -1], orientation_mode="X")
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
         self.angles = np.round(np.rad2deg(angle), 3)
         self.angles = self.angles[1:5] #[0,n,n,n,n,0]
-        # print(self.angles)
+
+        wrist_angle_radians = math.atan2(target_pose[1], target_pose[0])
+        wrist_angle_degrees = math.degrees(wrist_angle_radians) + target_pose[3] #atan로 구한 wrist의 각도를 빼서 0으로 맞춰주고, 목표 각도를 다시 더해주기
+
+        self.angles = np.r_[self.angles, wrist_angle_degrees]
+        print(self.angles)
         return self.angles
    
 #####################################################################################################################################################################################   
@@ -76,8 +82,7 @@ class FSM:
         self.object_size = None  # 초기값 설정
 
         # 초기 각도
-        self.start_degree = self.arm.IK(self.parking[:3])
-        self.start_degree = np.r_[self.start_degree, self.parking[3]]
+        self.start_degree = self.arm.IK(self.parking)
         #print(self.start_degree)
 
         # 초기 위치
@@ -126,43 +131,43 @@ class FSM:
         # 초기화
         if self.state == "init_pose":            
             self.pub_pose(self.init_pose)
-            print('update done to init_pose')
+            print('updated to init_pose')
             
         # pick 
         elif self.state == "pick_above":
             self.pub_pose(self.pick_above)
-            print('update done to pick_above')            
+            print('updated to pick_above')            
 
         elif self.state == "pick_grip":
             self.pub_pose(self.pick_grip)
-            print('update done to pick_grip')
+            print('updated to pick_grip')
 
         elif self.state == "grip_on":
             self.grip_seperation = self.object_size
             self.pub_grip(self.grip_seperation)
-            print("update done to grip_on")
+            print("updated to grip_on")
 
         elif self.state == "pick_lift":
             self.pub_pose(self.pick_lift)
-            print("update done to pick_lift")
+            print("updated to pick_lift")
             
         # place
         elif self.state == "place_above":
             self.pub_pose(self.place_above)
-            print("update done to place_above")
+            print("updated to place_above")
 
         elif self.state == "place_grip":
             self.pub_pose(self.place_grip)
-            print("update done to place_grip")
+            print("updated to place_grip")
 
         elif self.state == "grip_off":
             self.grip_seperation = self.grip_open
             self.pub_grip(self.grip_seperation)
-            print("update done to grip_off")
+            print("updated to grip_off")
 
         elif self.state == "place_lift":
             self.pub_pose(self.place_lift)
-            print("update done to place_lift")
+            print("updated to place_lift")
 
 
     ######################################################################################################
@@ -188,8 +193,7 @@ class FSM:
     def pub_pose(self, goal_pose, option = 0): #publish 좌표 + 손목 각도
 
         if option == 0 : #IK 계산
-            self.goal_degree = self.arm.IK(goal_pose[:3])
-            self.goal_degree = np.r_[self.goal_degree, goal_pose[3]]
+            self.goal_degree = self.arm.IK(goal_pose)
 
         elif option == 1 : #사진 촬영 Pose
             self.goal_degree = self.camera_pose

@@ -215,5 +215,6 @@ catkin_install_python(PROGRAMS
   scripts/vision_1.py
   scripts/pub_test.py
   scripts/motor_control.py
+  scripts/soomac_task_tailor_gui.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

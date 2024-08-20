@@ -56,8 +56,8 @@ class chain:
     )
 
   def IK(self, target_position):
-    angle = self.arm.inverse_kinematics(target_position, target_orientation=[0, 0, -1], orientation_mode="X")
-    # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로.
+    angle = self.arm.inverse_kinematics(target_position, target_orientation=[0, 0, -1], orientation_mode="X") # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
+    wrist_angle = math.atan2(y, x)
     self.angles = np.round(np.rad2deg(angle), 3)
     print(self.angles)
 

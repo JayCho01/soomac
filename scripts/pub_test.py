@@ -7,7 +7,8 @@ import numpy as np
 class pub_node():
     def __init__(self):
         rospy.init_node('pub_test', anonymous=True)
-        self.pos = np.array([100, 100, 100, 30, 5, 200, 200, 200, 50])
+        self.pos = np.array([300, 500, 50, 30, 50, # pick  : (x, y, z, theta, grip_size) 
+                            -300, 500, 30, 60 ])   # place : (x, y, z, theta)
         self.main()
 
     def main(self):
