@@ -71,30 +71,6 @@ N_grip = 50 # gripper motor 경로 분활
 # repeat_time = 0.05
 # impact_num = 13
 
-def cubic_trajectory(th_i, th_f): # input : 시작각도, 나중각도, 분활 넘버 -> output : (n, N) 배열
-    t = np.linspace(0, 1, N)
-    
-    # 3차 다항식 계수: 초기 속도와 최종 속도를 0으로 설정 (s_curve)
-    a0 = th_i[:, np.newaxis]
-    a1 = 0
-    a2 = 3 * (th_f - th_i)[:, np.newaxis]
-    a3 = -2 * (th_f - th_i)[:, np.newaxis]
-    
-    # 3차 다항식을 통해 각도를 계산 (각 행이 하나의 trajectory)
-    theta = a0 + a1 * t + a2 * t**2 + a3 * t**3
-    
-    return theta
-
-class main():
-    def __init__(self):
-        rospy.init_node('motor_control', anonymous=True)
-        self.control = DynamixelNode()
-        self.sub()
-
-    def sub(self): # main loop
-        rospy.Subscriber('goal_pose', fl, self.control.link)  # from IK solver
-        rospy.Subscriber('grip_seperation', Float32, self.control.gripper) # from master node
-        rospy.spin()
 
 
 class Impact: # 작업 예정
@@ -158,8 +134,8 @@ class Impact: # 작업 예정
         print("last_torque : ",self.last_torgue)
         print("diff_torques : ",self.diff_torques)
         print("last_diff_2rd : ",self.last_diff_2rd)
-        
-        
+
+
 class DynamixelNode:
     def __init__(self): # 파라미터 설정
         # setting
@@ -235,8 +211,8 @@ class DynamixelNode:
             rospy.loginfo("Torque enabled for XM Motor ID: {}".format(gripper_DXL_ID))        
         
         
-                
-        self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, 1, 84, 300) # XM540 p gain
+        # XM540 p gain 설정
+        self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, 1, 84, 300) 
 
     def read_motor_position(self, port_handler, packet_handler, dxl_id, addr_present_position): # 현재 모터 value 도출해주는 메서드
         # 모터의 현재 위치 읽기
@@ -298,7 +274,6 @@ class DynamixelNode:
         state_msg.data = True
         self.state_finish.publish(state_msg)
 
-#############################################   해야할 것   ####################################################                
     def read_motor_torque_xm(self, dxl_id): # 모터 전류값 읽는 메서드, 충돌 피드백을 위한 것이므로 추후 수정 예정
         # 모터의 현재 전류 값 읽기
         dxl_present_current, dxl_comm_result, dxl_error = self.packet_handler_xm.read2ByteTxRx(self.port_handler_xm, dxl_id, XM_CURRENT_ADDR)
@@ -349,6 +324,53 @@ class DynamixelNode:
         # 노드 종료 시 AX, XM 시리얼 포트 닫기
         self.port_handler_xm.closePort()    
         rospy.loginfo("Shutdown Dynamixel node.")
+
+
+class Pose:
+    def __init__(self):
+        self.goal_pose = rospy.Subscriber('goal_pose', fl, self.control.link)  # from IK solver
+        self.grip_seperaption = rospy.Subscriber('grip_seperation', Float32, self.control.gripper) # from master node
+        rospy.spin()
+
+        self.last_pose = [250, 0, 10, 30] #초기값
+        self.polylist = []
+
+    def poly(sefl, th_i, th_f): # input : 시작각도, 나중각도, 분할 넘버 -> output : (n, N) 배열
+
+        t = np.linspace(0, 1, N)
+        
+        # 3차 다항식 계수: 초기 속도와 최종 속도를 0으로 설정 (s_curve)
+        a0 = th_i[:, np.newaxis]
+        a1 = 0
+        a2 = 3 * (th_f - th_i)[:, np.newaxis]
+        a3 = -2 * (th_f - th_i)[:, np.newaxis]
+        
+        # 3차 다항식을 통해 각도를 계산 (각 행이 하나의 trajectory)
+        theta = a0 + a1 * t + a2 * t**2 + a3 * t**3
+        
+        return theta
+    
+    def pose_update(self):
+
+        if len(self.polylist) > 0:
+            self.last_pose = self.polylist[0]
+            self.polylist.pop(0)
+    
+        
+
+
+def main():
+    rospy.init_node('motor_control', anonymous=True)
+    rate = rospy.rate(30)
+
+    pose = Pose()
+    impact = Impact()
+    dynamixel = DynamixelNode()
+
+    while not rospy.is_shutdown():
+
+        dynamixel.pose_pub(pose.last_pose)
+        rate.sleep()
 
 
 if __name__ == '__main__':
