@@ -110,6 +110,7 @@ class impact: # 작업 예정
             self.diff_torques = np.append(self.diff_torques,[np.abs(diff_torque)], axis = 0)
         else:
             self.last_torgue = current_torque
+            
         if self.diff_torques.shape[0]>=10: # 10개 이상의 토크 미분값이 저장된 경우
             self.diff_torques[0] = self.diff_torques[8]
             self.diff_torques[1] = self.diff_torques[9]
