@@ -80,7 +80,6 @@ class FSM:
         self.lift_offset = np.array([0, 0, 150, 0])
         self.object_size = None  # 초기값 설정
 
-
         # 변수 사전 선언 // [0,0,0]으로 좌표 설정 시 해당 위치로 이동하라는 신호가 오면 base로 endpoint가 위치하려 하는 상황이 생기므로 초기값은 안전하게 설정함.
         self.pick_pose = [150, 0, 100, 0]
         self.place_pose = [150, 0, 100, 0]
@@ -226,7 +225,7 @@ class FSM:
             print('-- next state:', self.state)
             self.update()
 
-    def pub_pose(self, goal_pose= [150, 0, 100, 0], option = 0): # publish 좌표 + 손목 각도[,4] -> 5축 각도[,5] # goal_pose가 없는 init, parking일 경우에는 goal_pose는 임의의 값으로 설정(어차피 안씀)
+    def pub_pose(self, goal_pose=[150, 0, 100, 0], option=0): # publish 좌표 + 손목 각도[,4] -> 5축 각도[,5] # goal_pose가 없는 init, parking일 경우에는 goal_pose는 임의의 값으로 설정(어차피 안씀)
 
         if option == 0 : #IK 계산
             self.goal_degree = self.arm.IK(goal_pose)
@@ -241,13 +240,13 @@ class FSM:
         goal_msg = fl() 
         goal_msg.data = self.goal_degree
         self.pub_goal_pose.publish(goal_msg)
-        print('---- goal  axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)' % (self.goal_degree[0], self.goal_degree[1], self.goal_degree[2], self.goal_degree[3], self.goal_degree[4]))
+        print('---- goal axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)' % (self.goal_degree[0], self.goal_degree[1], self.goal_degree[2], self.goal_degree[3], self.goal_degree[4]))
 
     def pub_grip(self, grip_seperation): # gripper로 집어야할 사물의 길이 보내줌
         grip_msg = Float32()
         grip_msg.data = grip_seperation
         self.pub_grip_seperation.publish(grip_msg)
-        print('grip seperation:',grip_seperation)
+        print('grip seperation:', grip_seperation)
 
     def impact_feedback(self): # 미완성, 추후 추가 예정
         rospy.loginfo('subscribed - impact detected! going back to last state')

@@ -324,19 +324,61 @@ class DynamixelNode:
         # 노드 종료 시 AX, XM 시리얼 포트 닫기
         self.port_handler_xm.closePort()    
         rospy.loginfo("Shutdown Dynamixel node.")
+        
+    def pub_pose(self, pose):
+        for dxl_id in XM_DXL_ID:
+            # print("Set Goal XM_Position of ID %s = %s" % (XM_DXL_ID[dxl_id], xm_position[dxl_id]))
+            self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, dxl_id, XM_ADDR_GOAL_POSITION, pose[dxl_id])
+        rospy.loginfo("모터 제어 value : %d, %d, %d, %d, %d", *pose)
 
 
 class Pose:
     def __init__(self):
-        self.goal_pose = rospy.Subscriber('goal_pose', fl, self.control.link)  # from IK solver
-        self.grip_seperaption = rospy.Subscriber('grip_seperation', Float32, self.control.gripper) # from master node
-        rospy.spin()
+        self.goal_sub = rospy.Subscriber('goal_pose', fl, self.callback_goal)  # from IK solver
+        self.grip_sub = rospy.Subscriber('grip_seperation', Float32, self.callback_grip) # from master node
 
+        # init_setting
+        self.gripper_open = 1800
+        self.gripper_close = 3100
+
+        self.gripper_open_mm = 72 #54
+        self.gripper_close_mm = 15.9 #0
+        self.current_grip_seperation = self.gripper_open 
+        self.seperation_per_mm = (self.gripper_close/(self.gripper_open_mm-self.gripper_close_mm))
+
+        self.goal_pose = None
+        self.grip_seperation = None
+        self.current_pose = None
         self.last_pose = [250, 0, 10, 30] #초기값
-        self.polylist = []
+        self.trajectory = []
 
-    def poly(sefl, th_i, th_f): # input : 시작각도, 나중각도, 분할 넘버 -> output : (n, N) 배열
+    def callback_goal(self, msg):
+        self.goal_pose = np.array(msg.msg)
+        # 원래 알고리즘 상 현재 pose 를 기준으로 계산을 하는 거라 current pose로 넣어두긴 했는데
+        # trajectory에 goal이 밀려 있는 상태에서 계산하면 문제가 발생할 수 있을 거 같습니다
+        # self.current_pose -> self.last_pose 로 바꿔서도 한 번 해보세용
+        self.trajectory = np.append(self.trajectory, self.cubic_trajectory(self.current_pose, self.goal_pose))
 
+    def callback_grip(self, msg):
+        self.grip_seperation = msg.msg
+        goal_grip_seperation = 3100 - (self.grip_seperation - self.gripper_close_mm) * self.seperation_per_mm
+        
+        # linear traj
+        goal_grip_seperation = int(goal_grip_seperation)
+        grip_value_arr = np.linspace(self.current_grip_seperation, goal_grip_seperation, N_grip)
+        grip_value_arr = grip_value_arr.astype(int)
+
+        grip_trajectory = np.zeros((len(grip_trajectory, len(self.last_pose))))
+        _pose = self.current_pose # 여기도 self.current_pose -> self.last_pose 로 바꿔서도 한 번 해보세용
+        for idx, val in enumerate(grip_value_arr):
+            _pose[-1] = val
+            grip_trajectory[idx] = _pose
+
+        self.trajectory = np.append(self.trajectory, grip_trajectory)
+
+    def cubic_trajectory(self, th_i, th_f): # input : 시작각도, 나중각도, 분할 넘버 -> output : (n, N) 배열
+
+        # N 계산하는 식을 따로 만들면 좋을 거 같습니다
         t = np.linspace(0, 1, N)
         
         # 3차 다항식 계수: 초기 속도와 최종 속도를 0으로 설정 (s_curve)
@@ -346,19 +388,18 @@ class Pose:
         a3 = -2 * (th_f - th_i)[:, np.newaxis]
         
         # 3차 다항식을 통해 각도를 계산 (각 행이 하나의 trajectory)
-        theta = a0 + a1 * t + a2 * t**2 + a3 * t**3
-        
+        theta = a0 + a1 * t + a2 * t**2 + a3 * t**3  
+        theta = theta.astype(int).reshape(N, -1)
+
         return theta
     
-    def pose_update(self):
-
-        if len(self.polylist) > 0:
-            self.last_pose = self.polylist[0]
-            self.polylist.pop(0)
+    def pose_update(self, current_pose):
+        self.current_pose = current_pose
+        if len(self.trajectory) > 0:
+            self.last_pose = self.trajectory[0]
+            self.trajectory.pop(0)
     
         
-
-
 def main():
     rospy.init_node('motor_control', anonymous=True)
     rate = rospy.rate(30)
@@ -368,8 +409,9 @@ def main():
     dynamixel = DynamixelNode()
 
     while not rospy.is_shutdown():
-
         dynamixel.pose_pub(pose.last_pose)
+        pose.pose_update(dynamixel.present_position)
+
         rate.sleep()
 
 
