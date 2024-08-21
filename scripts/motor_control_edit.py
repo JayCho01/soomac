@@ -67,9 +67,9 @@ XM_TORQUE_DISABLE = 0
 # parameter
 N = 50 # link motor 경로 분활
 N_grip = 50 # gripper motor 경로 분활
-# timer = time.time()
-# repeat_time = 0.05
-# impact_num = 13
+timer = time.time()
+repeat_time = 0.05
+impact_num = 13
 
 
 
@@ -214,7 +214,7 @@ class DynamixelNode:
         # XM540 p gain 설정
         self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, 1, 84, 300) 
 
-    def read_motor_position(self, port_handler, packet_handler, dxl_id, addr_present_position): # 현재 모터 value 도출해주는 메서드
+    def present_position(self, port_handler, packet_handler, dxl_id, addr_present_position): # 현재 모터 value 도출해주는 메서드
         # 모터의 현재 위치 읽기
         dxl_present_position, _, _ = packet_handler.read2ByteTxRx(port_handler, dxl_id, addr_present_position)
         return dxl_present_position
@@ -232,7 +232,7 @@ class DynamixelNode:
         present_position = np.zeros(5)
 
         for dxl_id in XM_DXL_ID:
-            present_position[dxl_id] = self.read_motor_position(self.port_handler_xm, self.packet_handler_xm, dxl_id, XM_ADDR_PRESENT_POSITION)
+            present_position[dxl_id] = self.present_position(self.port_handler_xm, self.packet_handler_xm, dxl_id, XM_ADDR_PRESENT_POSITION)
 
         # print(present_position)
 
@@ -378,7 +378,13 @@ class Pose:
 
     def cubic_trajectory(self, th_i, th_f): # input : 시작각도, 나중각도, 분할 넘버 -> output : (n, N) 배열
 
-        # N 계산하는 식을 따로 만들면 좋을 거 같습니다
+        # N 계산 
+        delta_th = np.max(np.abs(th_f - th_i)) # 모터들의 변화량 계산 후, 모든 모터에서 발생할 수 있는 최대 변화량
+        min_n, max_n = 10, 50                  # 최소 및 최대 보간법 개수 설정
+        max_delta_th = 100                     # 모터에서 발생할 수 있는 최대 변화량
+        N = min_n + (delta_th / max_delta_th) * (max_n - min_n)
+
+
         t = np.linspace(0, 1, N)
         
         # 3차 다항식 계수: 초기 속도와 최종 속도를 0으로 설정 (s_curve)
@@ -409,7 +415,7 @@ def main():
     dynamixel = DynamixelNode()
 
     while not rospy.is_shutdown():
-        dynamixel.pose_pub(pose.last_pose)
+        dynamixel.pub_pose(pose.last_pose)
         pose.pose_update(dynamixel.present_position)
 
         rate.sleep()
