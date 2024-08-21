@@ -6,6 +6,7 @@ from PIL import Image, ImageTk
 import rospy
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool, String
+import threading
 
 class Robot_control:
     def __init__(self):
@@ -16,8 +17,8 @@ class Robot_control:
         self.gui_msg.data = None
         # vision test용 msg 
         self.vision_msg = fl()
-        self.vision_msg.data = [300, 500, 50, 30, 50, # pick : (x, y, z, theta, grip_size) 
-                                -300, 500, 30, 60 ] # place : (x, y, z, theta)
+        self.vision_msg.data = [250, 0, 10, 30, 20, # pick : (x, y, z, theta, grip_size) 
+                                400, 0, 10, 60 ] # place : (x, y, z, theta)
     def vision(self):
         self.pub_vision.publish(self.vision_msg)
         print('vision topic')
@@ -28,7 +29,7 @@ class Robot_control:
         print('gui - start')
 
     def init_pos(self):
-        self.gui_msg.data = "gui_init_pos"
+        self.gui_msg.data = "gui_init_pose"
         self.pub_gui.publish(self.gui_msg)
         print('gui - init_pos')
 
@@ -42,17 +43,29 @@ class Robot_control:
         self.pub_gui.publish(self.gui_msg)
         print('gui - pause')
 
+class ros_subscribe:
+    def __init__(self) -> None:
+        pass
+
+    def ros_sub(self):
+        print('subscribing')
+        rospy.Subscriber('impact_to_gui', Bool, self.callback)
+        rospy.spin()  # ROS 이벤트 루프 실행    
+
+    def callback(self,data):
+        impact = data.data
+        if impact == True:
+            impact_screen()
 # 메인 화면 설정
 def main_screen():
-    rospy.init_node('GUI', anonymous=True)
     root = Tk()
     root.title("Soomac Taylor")
-    root.geometry("420x420")
+    root.geometry("420x520")
     root.configure(bg="#e0f7da")  # 연한 초록색 배경
     robot_arm = Robot_control() # 로봇 제어 클래스
 
     # 타이틀 레이블
-    title_label = Label(root, text="Soomac Taylor", font=("Helvetica", 20, "bold"), bg="#a5d6a7", fg="#1b5e20")
+    title_label = Label(root, text="Soomac Task Taylor", font=("Helvetica", 20, "bold"), bg="#a5d6a7", fg="#1b5e20")
     title_label.grid(row=0, column=0, columnspan=2, pady=20)
 
     # 종료 버튼을 누를 때 확인 창을 띄우는 함수
@@ -80,35 +93,44 @@ def main_screen():
 
     # 메인 화면 버튼들 배치
     buttons = [
+        ("실 행", robot_arm.start),
         ("새 Task 정의", open_task_definition),
         ("Task 불러오기", lambda: None),
         ("종료", confirm_exit),
         ("초기 위치", robot_arm.init_pos),
         ("일시 정지", robot_arm.pause),
-        ("start(로봇 정보)", robot_arm.start), # 테스트용
+        ("로봇 정보", lambda: None),
         ("vision_data(개발자 정보)", robot_arm.vision), # 테스트용
         ("긴급 정지", robot_arm.stop),
         # ("종료", confirm_exit),
     ]
 
     positions = [
-        (1, 0),  # 새 Task 정의
-        (1, 1),  # Task 불러오기
-        (4, 1),  # 종료
-        (2, 0),  # 초기 위치
-        (2, 1),  # 일시 정지
-        (3, 0),  # 로봇 정보
-        (3, 1),  # 개발자 정보
-        (4, 0),  # 긴급 정지
-        (4, 1)   # 종료
+        (1, 0),  # 실행
+        (2, 0),  # 새 Task 정의
+        (2, 1),  # Task 불러오기
+        (5, 1),  # 종료
+        (3, 0),  # 초기 위치
+        (3, 1),  # 일시 정지
+        (4, 0),  # 로봇 정보
+        (4, 1),  # 개발자 정보
+        (5, 0),  # 긴급 정지
+        (5, 1)   # 종료
     ]
+    
 
     for i, (text, command) in enumerate(buttons):
-        row, col = positions[i]
-        button = Button(root, text=text, command=command, width=20, height=3, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white")
-        button.grid(row=row, column=col, padx=10, pady=10)
+        if i == 0:  # 실행 버튼
+            row, col = positions[i]
+            button = Button(root, text=text, command=command, width=46, height=3, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white")
+            button.grid(row=row, column=col, padx=0, pady=10, columnspan=2)  # columnspan=2 추가
+        else:  # 나머지 버튼
+            row, col = positions[i]
+            button = Button(root, text=text, command=command, width=20, height=3, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white")
+            button.grid(row=row, column=col, padx=10, pady=10)
 
     root.mainloop()
+
 
 # Task 정의 창 열기
 def open_task_definition():
@@ -256,5 +278,34 @@ def ask_to_execute():
     no_button = Button(execute_window, text="아니오", command=close_all_windows, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white", width=10, height=2)
     no_button.pack(side=RIGHT, padx=10, pady=10)
 
+def impact_screen():
+    exit_window = Toplevel()
+    exit_window.title("충돌 감지")
+    exit_window.geometry("400x150")
+    exit_window.configure(bg="#e0f7da")
+
+    Label(exit_window, text="충돌이 감지되었습니다, 조치 후 계속하십시오.", bg="#e0f7da", fg="#1b5e20", font=("Helvetica", 14)).pack(pady=20)
+
+    ############### 코드 추가해야할 부분 ###################
+    # GUI를 종료하면서 로봇을 거치대로 이동하는 작업을 수행하기 위해서 exit_program 함수에 로봇이 거치대로 이동하는 코드를 추가해야함. 
+    def exit_program():
+        exit_window.destroy()
+
+    def close_exit_window():
+        pass
+
+    yes_button = Button(exit_window, text="계속", command=exit_program, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white", width=10, height=2)
+    yes_button.pack(side=LEFT, padx=(50,10), pady=10)
+
+    no_button = Button(exit_window, text="종료", command=close_exit_window, bg="#66bb6a", fg="white", activebackground="#388e3c", activeforeground="white", width=10, height=2)
+    no_button.pack(side=RIGHT, padx=(10,50), pady=10)
+
+
+
 if __name__ == "__main__":
+    rospy.init_node('GUI', anonymous=True)
+    sub = ros_subscribe()
+    ros_thread = threading.Thread(target=sub.ros_sub)
+    ros_thread.daemon = True
+    ros_thread.start()
     main_screen()
