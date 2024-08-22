@@ -326,10 +326,20 @@ class DynamixelNode:
         rospy.loginfo("Shutdown Dynamixel node.")
         
     def pub_pose(self, pose):
+
+        position_dynamixel = np.array(pose)
+
+        position_dynamixel[0] = 1007 # base 수리 되면 변경 -> (position_dynamixel[0]+180)*self.change_para
+        position_dynamixel[1] = (position_dynamixel[1]+90)*self.change_para
+        position_dynamixel[2] = (position_dynamixel[2]+180+20)*self.change_para #모터 쳐짐 고려 +20
+        position_dynamixel[3] = (position_dynamixel[3]+180)*self.change_para
+        position_dynamixel[4] = (position_dynamixel[4]+180)*self.change_para        
+        position_dynamixel = position_dynamixel.astype(int)
+
         for dxl_id in XM_DXL_ID:
             # print("Set Goal XM_Position of ID %s = %s" % (XM_DXL_ID[dxl_id], xm_position[dxl_id]))
-            self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, dxl_id, XM_ADDR_GOAL_POSITION, pose[dxl_id])
-        rospy.loginfo("모터 제어 value : %d, %d, %d, %d, %d", *pose)
+            self.packet_handler_xm.write4ByteTxRx(self.port_handler_xm, dxl_id, XM_ADDR_GOAL_POSITION, position_dynamixel[dxl_id])
+        rospy.loginfo("모터 제어 value : %d, %d, %d, %d, %d", *position_dynamixel)
 
 
 class Pose:
@@ -349,7 +359,7 @@ class Pose:
         self.goal_pose = None
         self.grip_seperation = None
         self.current_pose = None
-        self.last_pose = [250, 0, 10, 30] #초기값
+        self.last_pose = [250, 0, 10, 30, 30] #초기값
         self.trajectory = []
 
     def callback_goal(self, msg):
@@ -396,6 +406,7 @@ class Pose:
         # 3차 다항식을 통해 각도를 계산 (각 행이 하나의 trajectory)
         theta = a0 + a1 * t + a2 * t**2 + a3 * t**3  
         theta = theta.astype(int).reshape(N, -1)
+        theta = theta.T # 데이터 타입 맞춰주기 위한 전치
 
         return theta
     
