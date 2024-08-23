@@ -108,7 +108,7 @@ def main_screen():
         ("초기 위치", robot_arm.init_pos),
         ("일시 정지", robot_arm.pause),
         ("impact_test(로봇 정보)", robot_arm.impact_test),
-        ("vision_data(개발자 정보)", robot_arm.vision), # 테스트용
+        ("vision_data(개발자 정보)", robot_arm.vision_test), # 테스트용
         ("긴급 정지", robot_arm.stop),
         # ("종료", confirm_exit),
     ]

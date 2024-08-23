@@ -1,6 +1,7 @@
 import rospy
 import numpy as np
 import math
+import time
 from std_msgs.msg import Float32MultiArray as fl
 from std_msgs.msg import Bool, Float32
 from std_msgs.msg import String
@@ -63,6 +64,7 @@ class FSM:
     def __init__(self):
         # 초기값 세팅
         self.state_done = False
+        self.task_done = False
         self.grip_open = 72
         self.grip_seperation = self.grip_open
         self.state = "parking"
@@ -99,11 +101,13 @@ class FSM:
         self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10) # 목표 pose에 대한 각도를 보낸다((,5)).
         self.pub_grip_seperation = rospy.Publisher('grip_seperation', Float32, queue_size=10) # fl -> Float32로 변경, 실수값 1개는 array로 못넘김
         self.pub_start = rospy.Publisher('start', Bool, queue_size=10)
+        self.pub_task = rospy.Publisher('task_to_motor_control', String, queue_size=10)
+
     def move_to_init(self): # init pose로 direct 이동, GUI에서 초기 위치 누르면 해당 메서드 동작
         print('###start###')
         msg = Bool()
-        msg.msg = True
-        self.pub_start(msg)
+        msg.data = True
+        self.pub_start.publish(msg)
         self.state = "init_pose"
 
     def action_setting(self, print_op=False): # vision으로 부터 받은 정보를 바탕으로 way point의 좌표 정보 제작
@@ -232,6 +236,7 @@ class Callback:
         rospy.Subscriber('task_type', String, self.task_type)
         rospy.Subscriber('state_done', Bool, self.state_done)
         rospy.Subscriber('impact_feedback', Bool, self.impact) # 구현 예정
+        rospy.Subscriber('task_done', Bool, self.task_done)
         rospy.spin()
 
     def vision(self, data): # camera -> 동작
@@ -242,18 +247,28 @@ class Callback:
     def task_type(self, data): # gui로 부터 task받을 시 동작 메서드
 
         if data.data == "gui_start" : # 주차(or 어디든) -> init # 초가 주차 상태일 때 누르면 init으로 옴
-            rospy.loginfo('gui_start topic is subed')
+            rospy.loginfo('subscribed gui_start topic')
             self.soomac_fsm.move_to_init()
 
         elif data.data == "gui_stop" :
-            rospy.loginfo('gui_stop topic is subed')
+            rospy.loginfo('subscribed gui_stop topic')
 
+            msg = String()
+            msg.data = "stop"
+            self.soomac_fsm.pub_task.publish(msg)
+
+            while self.soomac_fsm.task_done == False :
+                time.sleep(1)
+
+            # 동작 이어서 하기
+
+                
         elif data.data == "gui_pause" :
-            rospy.loginfo('gui_pause topic is subed')
+            rospy.loginfo('subscribed gui_pause topic')
 
         elif data.data == "gui_init_pose" :
             self.soomac_fsm.move_to_init()
-            rospy.loginfo('gui_init_pose topic is subed')
+            rospy.loginfo('subscribed gui_init_pose topic')
             
     def state_done(self, data): # motor_control로 부터 state_done 받을 시 동작 메섣,
         print('test')
@@ -262,7 +277,12 @@ class Callback:
             self.soomac_fsm.new_state()
         
     def impact(self, data): # motor_control로 부터 impact 감지시 동작 메서드, 추후 제작 예정
-        rospy.loginfo('impact topic is subed')
+        rospy.loginfo('subscribed impact topic')
+
+    def task_done(self, data):
+        rospy.loginfo('subscribed task_done topic')
+        self.soomac_fsm.task_done = True
+        
 
 #####################################################################################################################################################################################
 # main
