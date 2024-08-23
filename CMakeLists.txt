@@ -218,5 +218,6 @@ catkin_install_python(PROGRAMS
   scripts/soomac_master_node_jay.py
   scripts/soomac_task_tailor_gui.py  
   scripts/vision_1.py
+  scripts/GUI.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
