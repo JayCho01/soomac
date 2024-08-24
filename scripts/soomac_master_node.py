@@ -123,14 +123,47 @@ class FSM:
         self.place_lift = self.place_pose + self.lift_offset
         if print_op == True:
             print('Pick : ' , self.pick_above,  ' -> ', self.pick_grip,  ' -> ', self.pick_lift)
-            print('Place : ', self.place_above, ' -> ', self.place_grip, ' -> ', self.place_lift)            
+            print('Place : ', self.place_above, ' -> ', self.place_grip, ' -> ', self.place_lift)    
 
+    def rotate_x(self, vector, degree):
+        # Degree to Radian
+        rad = np.radians(degree)
+
+        # Rotation Matrix
+        rotation_matrix = np.array([
+            [1, 0, 0],
+            [0, np.cos(rad), -np.sin(rad)],
+            [0, np.sin(rad), np.cos(rad)]
+        ])
+
+        return np.dot(rotation_matrix, vector)
+
+    def translate(self, vector, translation):
+        return vector + translation      
+
+    def transformation(self, pose):
+
+        self.translate_vector = np.array([0, 0.2, 0.3])
+        self.rotate_degree = -30
+
+        vector = pose[:3]
+
+        rotated_vector = self.rotate_x(vector, self.rotate_degree)
+
+        translated_vector = self.translate(rotated_vector, self.translate_vector)
+
+        print(translated_vector)
+
+        return np.r_[translated_vector, pose[3]]
+    
     # 비전으로터 받는 데이터 형식 {"pick": (x, y, z, theta, grip size), "place": (x, y, z, heading)}
     def get_data_from_vision(self,data): # vision으로 부터 받은 데이터를 가공해줌 -> 이후 action_setting 진행 -> 이후 new_state로 넘어가서 새로운 동작 진행
         vision_data = data
         self.object_size = np.array(vision_data[4])
         self.pick_pose = np.array(list(vision_data[:4]))
         self.place_pose = np.array(list(vision_data[5:]))
+        self.pick_pose = self.transformation(self.pick_pose)
+        self.place_pose = self.transformation(self.place_pose)
         self.action_setting(print_op=True) # vision data 기반으로 way point 설정, # print option은 vision data로 가공된 정보 확인하기 위함
         self.new_state() # init에서 vision 정보 받았으니 새로운 state로 이동 시 물체 위로 이동
 
