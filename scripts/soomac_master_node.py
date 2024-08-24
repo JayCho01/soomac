@@ -45,7 +45,7 @@ class MakeChain:
             self.Make_URDF('link5', d[4], a[4], al[4])],
             active_links_mask=[False, True, True, True, True, False] )
  
-    # IK 메서드: position -> angle(4개 축)
+    # IK : position -> 1st~4th angle / atan -> 5th angle 
     def IK(self, target_pose):
         angle = self.arm.inverse_kinematics(target_pose[:3], target_orientation=[0, 0, -1], orientation_mode="X") #, target_orientation=[0, 0, -1], orientation_mode="X")
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
@@ -55,8 +55,7 @@ class MakeChain:
         wrist_angle_radians = math.atan2(target_pose[1], target_pose[0])
         wrist_angle_degrees = math.degrees(wrist_angle_radians) + target_pose[3] #atan로 구한 wrist의 각도를 빼서 0으로 맞춰주고, 목표 각도를 다시 더해주기
         
-        self.angles = np.r_[self.angles, 0]
-        print(self.angles)
+        self.angles = np.r_[self.angles, wrist_angle_degrees]
         return self.angles
    
 #####################################################################################################################################################################################   
@@ -69,11 +68,11 @@ class FSM:
         self.task_done = False
         self.grip_open = 72
         self.grip_seperation = self.grip_open
-        self.state = "parking"
+        self.current_state = "parking"
         self.last_state = "parking"
         self.arm = MakeChain()
 
-        # 고정된 위치
+        # fixed pose
         self.parking = np.array([-90, 100, -125, -70, 0]) # parking 자세 설계팀과 상의 필요 # 각도값 조절 필요, 일단 카메라 포즈랑 동일하게 해둠
         self.init_pose = np.array([-90, 100, -125, -70, 0]) # 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
         
@@ -98,18 +97,20 @@ class FSM:
         # master to motor_control
         self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10) 
         self.pub_grip_seperation = rospy.Publisher('grip_seperation', Float32, queue_size=10) 
-        self.pub_task = rospy.Publisher('task_to_motor_control', String, queue_size=10)
+        self.pub_task_motor = rospy.Publisher('task_to_motor_control', String, queue_size=10)
         # master to GUI
         self.pub_pnp_done = rospy.Publisher('pnp_done', Bool, queue_size=10)
+        self.pub_task_gui = rospy.Publisher('input_task', String, queue_size=10)
+
 
     ######################################################################################################
 
     def move_to_init(self): # init pose로 direct 이동, GUI에서 초기 위치 누르면 해당 메서드 동작
-        print('###start###')
+        print('\n---------------- Started! Moving to initial pose ----------------')
         msg = String()
         msg.data = "start"
-        self.pub_task.publish(msg)
-        self.state = "init_pose"
+        self.pub_task_motor.publish(msg)
+        self.current_state = "init_pose"
 
     def action_setting(self, print_op=False): # vision으로 부터 받은 정보를 바탕으로 way point의 좌표 정보 제작
         # pick zone
@@ -122,8 +123,15 @@ class FSM:
         self.place_grip = self.place_pose + self.grip_offset
         self.place_lift = self.place_pose + self.lift_offset
         if print_op == True:
-            print('Pick : ' , self.pick_above,  ' -> ', self.pick_grip,  ' -> ', self.pick_lift)
-            print('Place : ', self.place_above, ' -> ', self.place_grip, ' -> ', self.place_lift)    
+            print('\nSpecific position data ---------------')
+            print(f'-Pick Above:  [{self.pick_above[0]:.1f}, {self.pick_above[1]:.1f}, {self.pick_above[2]:.1f}, {self.pick_above[3]:.1f}]')
+            print(f'-Pick Grip:   [{self.pick_grip[0]:.1f}, {self.pick_grip[1]:.1f}, {self.pick_grip[2]:.1f}, {self.pick_grip[3]:.1f}]')
+            print(f'-Pick Lift:   [{self.pick_lift[0]:.1f}, {self.pick_lift[1]:.1f}, {self.pick_lift[2]:.1f}, {self.pick_lift[3]:.1f}]')
+            print(f'-Place Above: [{self.place_above[0]:.1f}, {self.place_above[1]:.1f}, {self.place_above[2]:.1f}, {self.place_above[3]:.1f}]')
+            print(f'-Place Grip:  [{self.place_grip[0]:.1f}, {self.place_grip[1]:.1f}, {self.place_grip[2]:.1f}, {self.place_grip[3]:.1f}]')
+            print(f'-Place Lift:  [{self.place_lift[0]:.1f}, {self.place_lift[1]:.1f}, {self.place_lift[2]:.1f}, {self.place_lift[3]:.1f}]')
+            #print('pick_above:',self.pick_above, '\npick_grip:', self.pick_grip, '\npick_lift:', self.pick_lift)
+            #print('place_above', self.place_above, '\nplace_grip', self.place_grip, '\nplace_lift', self.place_lift)    
 
     def rotate_x(self, vector, degree):
         # Degree to Radian
@@ -147,9 +155,7 @@ class FSM:
         self.rotate_degree = -30
 
         vector = pose[:3]
-
         rotated_vector = self.rotate_x(vector, self.rotate_degree)
-
         translated_vector = self.translate(rotated_vector, self.translate_vector)
 
         print(translated_vector)
@@ -168,59 +174,17 @@ class FSM:
         self.new_state() # init에서 vision 정보 받았으니 새로운 state로 이동 시 물체 위로 이동
 
     ######################################################################################################
-    
-    def update(self): #new_state로부터 갱신된 동작을 진행
-        # initialize
-        if self.state == "init_pose":            
-            self.pub_pose(self.init_pose)
-            print('updated to init_pose')
-            
-        # pick 
-        elif self.state == "pick_above":
-            self.pub_pose(self.pick_above)
-            print('updated to pick_above')            
-
-        elif self.state == "pick_grip":
-            self.pub_pose(self.pick_grip)
-            print('updated to pick_grip')
-
-        elif self.state == "grip_on":
-            self.grip_seperation = self.object_size
-            self.pub_grip(self.grip_seperation)
-            print("updated to grip_on")
-
-        elif self.state == "pick_lift":
-            self.pub_pose(self.pick_lift)
-            print("updated to pick_lift")
-            
-        # place
-        elif self.state == "place_above":
-            self.pub_pose(self.place_above)
-            print("updated to place_above")
-
-        elif self.state == "place_grip":
-            self.pub_pose(self.place_grip)
-            print("updated to place_grip")
-
-        elif self.state == "grip_off":
-            self.grip_seperation = self.grip_open
-            self.pub_grip(self.grip_open)
-            print("updated to grip_off")
-
-        elif self.state == "place_lift":
-            self.pub_pose(self.place_lift)
-            print("updated to place_lift")
 
     def new_state(self): # state_done 시 방금 도착한 자세가 init이 아닌 경우 새로운 state로 변경해줌. 이후에는 바로 동작 update 진행
 
-        current_state_index = self.action_list.index(self.state)
-        print('current state:', self.state, '(index:', current_state_index,')')
+        current_state_index = self.action_list.index(self.current_state)
+        print('\nCurrent state:', self.current_state, '(index:', current_state_index, end=')')
 
         if current_state_index == self.action_num-1: # place_offset(마지막)인 경우 init_pos로 이동 // init_pos로 이동 시 state_done topic이 와도 다음 동작으로 넘어가지 않음. 다시 vision topic 올때 까지 기다림
             print("Pick and place 완료")
-            self.last_state = self.state
-            self.state = self.action_list[1] # init_pose로 이동
-            print('-- next state:', self.state)
+            self.last_state = self.current_state
+            self.current_state = self.action_list[1] # init_pose로 이동
+            print(' --> Next state:', self.current_state)
             self.update()
 
             msg = Bool()
@@ -228,16 +192,61 @@ class FSM:
             self.pub_pnp_done.publish(msg) 
 
         else:
-            self.last_state = self.state
-            self.state = self.action_list[current_state_index+1]
-            print('-- next state:', self.state)
+            self.last_state = self.current_state
+            self.current_state = self.action_list[current_state_index+1]
+            print(' --> Next state:', self.current_state)
             self.update()
 
-    def pub_pose(self, goal_pose= [150, 0, 100, 0], option = 0): # publish 좌표 + 손목 각도[,4] -> 5축 각도[,5] # goal_pose가 없는 init, parking일 경우에는 goal_pose는 임의의 값으로 설정(어차피 안씀)
+    def update(self): #new_state로부터 갱신된 동작을 진행
+        # init
+        if self.current_state == "init_pose":            
+            self.pub_pose(self.init_pose, 1) # option 1
+            print('updated to init_pose')
+            
+        # pick 
+        elif self.current_state == "pick_above":
+            self.pub_pose(self.pick_above)
+            print('updated to pick_above')            
+
+        elif self.current_state == "pick_grip":
+            self.pub_pose(self.pick_grip)
+            print('updated to pick_grip')
+
+        elif self.current_state == "grip_on":
+            self.grip_seperation = self.object_size
+            self.pub_grip(self.grip_seperation)
+            print("updated to grip_on")
+
+        elif self.current_state == "pick_lift":
+            self.pub_pose(self.pick_lift)
+            print("updated to pick_lift")
+            
+        # place
+        elif self.current_state == "place_above":
+            self.pub_pose(self.place_above)
+            print("updated to place_above")
+
+        elif self.current_state == "place_grip":
+            self.pub_pose(self.place_grip)
+            print("updated to place_grip")
+
+        elif self.current_state == "grip_off":
+            self.grip_seperation = self.grip_open
+            self.pub_grip(self.grip_open)
+            print("updated to grip_off")
+
+        elif self.current_state == "place_lift":
+            self.pub_pose(self.place_lift)
+            print("updated to place_lift")
+
+        print('------------------------------------------------------------------')
+
+    
+    def pub_pose(self, goal_pose = [150, 0, 100, 0], option = 0): # publish 좌표 + 손목 각도[,4] -> 5축 각도[,5] # goal_pose가 없는 init, parking일 경우에는 goal_pose는 임의의 값으로 설정(어차피 안씀)
 
         if option == 0 : #IK 계산
             self.goal_degree = self.arm.IK(goal_pose)
-            print('---- goal pose(%.2f %.2f %.2f)' % (goal_pose[0], goal_pose[1], goal_pose[2]))
+            print('-- goal pose (%.1f %.1f %.1f %.1f)' % (goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3]))
         
         elif option == 1 : #사진 촬영 Pose(init_pose)
             self.goal_degree = self.init_pose
@@ -248,19 +257,15 @@ class FSM:
         goal_msg = fl() 
         goal_msg.data = self.goal_degree
         self.pub_goal_pose.publish(goal_msg)
-        print('---- goal  axis(%.2f %.2f %.2f %.2f) ori(%.2f deg)' % (self.goal_degree[0], self.goal_degree[1], self.goal_degree[2], self.goal_degree[3], self.goal_degree[4]))
+        print('-- goal axis (%.1f %.1f %.1f %.1f %.1f)' % (self.goal_degree[0], self.goal_degree[1], self.goal_degree[2], self.goal_degree[3], self.goal_degree[4]))
 
-    def pub_grip(self, grip_seperation): # gripper로 집어야할 사물의 길이 보내줌
+    def pub_grip(self, grip_seperation):
         grip_msg = Float32()
         grip_msg.data = grip_seperation
         self.pub_grip_seperation.publish(grip_msg)
-        print('grip seperation:',grip_seperation)
+        print('grip seperation:', grip_seperation)
 
-    def impact_feedback(self): # 미완성, 추후 추가 예정
-        rospy.loginfo('subscribed - impact detected! going back to last state')
-        self._state = self._last_state
-        self.update(self._current_obj_pose)
-        rospy.loginfo('freeze for 10s')
+
 
 #####################################################################################################################################################################################   
 # Callback Class
@@ -283,12 +288,11 @@ class Callback:
         rospy.spin()
 
     def vision(self, data): # camera -> 동작
-        rospy.loginfo('vision topic is subed')
-        rospy.loginfo('subscribed - object initial pos(%.2f %.2f %.2f) ori(%.2f deg), object size(%.2f), goal pos(%.2f %.2f %.2f) ori(%.2f deg)', *data.data)
+        print('\nSubscribed vision topic\n: object initial pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°), object size({:.1f}), goal pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°)'.format(*data.data))
         self.soomac_fsm.get_data_from_vision(data.data)
 
     def task_type(self, data): # gui로 부터 task받을 시 동작 메서드
-        rospy.loginfo(f'Subscribed {data.data} topic')
+        #rospy.loginfo(f'Subscribed {data.data} topic')
 
         if data.data == "gui_start" : # 주차(or 어디든) -> init # 초가 주차 상태일 때 누르면 init으로 옴
             self.soomac_fsm.move_to_init()
@@ -300,30 +304,33 @@ class Callback:
 
             msg = String()
             msg.data = "stop"
-            self.soomac_fsm.pub_task.publish(msg)
+            self.soomac_fsm.pub_task_motor.publish(msg)
 
             while self.soomac_fsm.task_done == False :
                 time.sleep(0.1)
 
             # 동작 이어서 하기
-            rospy.loginfo('Continuing the operation after stop')
+            print('Continuing the operation after stop')
+        
+        elif data.data == "previous" :
+            self.soomac_fsm.move_to_init()
 
-    def state_done(self, data): # motor_control로 부터 state_done 받을 시 동작 메섣,
+    def state_done(self): # motor_control로 부터 state_done 받을 시 동작 메서드
         print('test')
-        if self.soomac_fsm.state != "init_pose": # init_pose로 이동 완료된 상황에서는 new_state안하고 vision 정보 기다림
+        if self.soomac_fsm.current_state != "init_pose": # init_pose로 이동 완료된 상황에서는 new_state안하고 vision 정보 기다림
             print('state_done\n')
             self.soomac_fsm.new_state()
 
     # 추후 코드 수정 필요
-    def task_done(self, data):
-        rospy.loginfo('subscribed task_done topic')
+    def task_done(self):
+        print('subscribed task_done topic')
         self.soomac_fsm.task_done = True
         
-    # 추후 코드 수정 필요
-    def impact(self, data): 
-        rospy.loginfo('Impact detected!')
-
-        
+    def impact(self, msg): 
+        print('Impact detected! Freezing for 10s')
+        msg = String()
+        msg.data = "impact"
+        self.soomac_fsm.pub_task_gui.publish(msg)
 
 #####################################################################################################################################################################################
 
