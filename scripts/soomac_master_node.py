@@ -102,6 +102,8 @@ class FSM:
         self.pub_grip_seperation = rospy.Publisher('grip_seperation', Float32, queue_size=10) # fl -> Float32로 변경, 실수값 1개는 array로 못넘김
         self.pub_start = rospy.Publisher('start', Bool, queue_size=10)
         self.pub_task = rospy.Publisher('task_to_motor_control', String, queue_size=10)
+        self.pub_pnp_done = rospy.Publisher('pnp_done', Bool, queue_size=10)
+
 
     def move_to_init(self): # init pose로 direct 이동, GUI에서 초기 위치 누르면 해당 메서드 동작
         print('###start###')
@@ -187,8 +189,11 @@ class FSM:
             self.last_state = self.state
             self.state = self.action_list[1] # init_pose로 이동
             print('-- next state:', self.state)
-            ## vision에 pub
             self.update()
+
+            msg = Bool()
+            msg.data = True
+            self.pub_pnp_done.publish(msg) 
 
         else:
             self.last_state = self.state
@@ -258,11 +263,11 @@ class Callback:
             self.soomac_fsm.pub_task.publish(msg)
 
             while self.soomac_fsm.task_done == False :
-                time.sleep(1)
+                time.sleep(0.1)
 
             # 동작 이어서 하기
+            rospy.loginfo('Continuing the operation after stop')
 
-                
         elif data.data == "gui_pause" :
             rospy.loginfo('subscribed gui_pause topic')
 
