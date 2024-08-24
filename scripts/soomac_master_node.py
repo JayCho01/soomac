@@ -51,10 +51,11 @@ class MakeChain:
         # orientation mode 를 "X"로 설정하기. EE의 green axis가 x축 이므로
         self.angles = np.round(np.rad2deg(angle), 3)
         self.angles = self.angles[1:5] #[0,n,n,n,n,0]
-
-        wrist_angle_radians = math.atan2(target_pose[1], target_pose[0])
-        wrist_angle_degrees = math.degrees(wrist_angle_radians) + target_pose[3] #atan로 구한 wrist의 각도를 빼서 0으로 맞춰주고, 목표 각도를 다시 더해주기
         
+        wrist_angle_radians = math.atan(target_pose[1]/(target_pose[0]))
+        wrist_angle_degrees = - math.degrees(wrist_angle_radians) - target_pose[3] #atan로 구한 wrist의 각도를 빼서 0으로 맞춰주고, 목표 각도를 다시 더해주기
+
+
         self.angles = np.r_[self.angles, wrist_angle_degrees]
         return self.angles
    
@@ -66,7 +67,7 @@ class FSM:
         # initial setting
         self.state_done = False
         self.task_done = False
-        self.grip_open = 72
+        self.grip_open = 49
         self.grip_seperation = self.grip_open
         self.current_state = "parking"
         self.last_state = "parking"
@@ -74,7 +75,7 @@ class FSM:
 
         # fixed pose
         self.parking = np.array([-90, 100, -125, -70, 0]) # parking 자세 설계팀과 상의 필요 # 각도값 조절 필요, 일단 카메라 포즈랑 동일하게 해둠
-        self.init_pose = np.array([-90, 100, -125, -70, 0]) # 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
+        self.init_pose = np.array([0, 90, -90, -40, 0]) # 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
         
         # offset parameter
         self.above_offset = np.array([0, 0, 120, 0])
@@ -98,6 +99,7 @@ class FSM:
         self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10) 
         self.pub_grip_seperation = rospy.Publisher('grip_seperation', Float32, queue_size=10) 
         self.pub_task_motor = rospy.Publisher('task_to_motor_control', String, queue_size=10)
+        
         # master to GUI
         self.pub_pnp_done = rospy.Publisher('pnp_done', Bool, queue_size=10)
         self.pub_task_gui = rospy.Publisher('input_task', String, queue_size=10)
@@ -168,8 +170,8 @@ class FSM:
         self.object_size = np.array(vision_data[4])
         self.pick_pose = np.array(list(vision_data[:4]))
         self.place_pose = np.array(list(vision_data[5:]))
-        self.pick_pose = self.transformation(self.pick_pose)
-        self.place_pose = self.transformation(self.place_pose)
+        #self.pick_pose = self.transformation(self.pick_pose)
+        #self.place_pose = self.transformation(self.place_pose)
         self.action_setting(print_op=True) # vision data 기반으로 way point 설정, # print option은 vision data로 가공된 정보 확인하기 위함
         self.new_state() # init에서 vision 정보 받았으니 새로운 state로 이동 시 물체 위로 이동
 
@@ -315,8 +317,8 @@ class Callback:
         elif data.data == "previous" :
             self.soomac_fsm.move_to_init()
 
-    def state_done(self): # motor_control로 부터 state_done 받을 시 동작 메서드
-        print('test')
+    def state_done(self, data): # motor_control로 부터 state_done 받을 시 동작 메서드
+        # print('test')
         if self.soomac_fsm.current_state != "init_pose": # init_pose로 이동 완료된 상황에서는 new_state안하고 vision 정보 기다림
             print('state_done\n')
             self.soomac_fsm.new_state()

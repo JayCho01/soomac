@@ -13,13 +13,17 @@ class Robot_control:
         self.pub_vision = rospy.Publisher('vision', fl, queue_size=10) 
         self.pub_gui = rospy.Publisher('task_type', String, queue_size=10)
         self.impact = rospy.Publisher('impact_feedback', Bool, queue_size=10)
+        self.start_test = rospy.Publisher('start', Bool, queue_size=10)
+        self.goal_pose_test = rospy.Publisher('goal_pose', fl, queue_size=10)        
+        
         # gui msg type 정의
         self.gui_msg = String()
         self.gui_msg.data = None
         # vision test용 msg 
         self.vision_msg = fl()
-        self.vision_msg.data = [250, 0, 10, 30, 20, # pick : (x, y, z, theta, grip_size) 
-                                400, 0, 10, 60 ] # place : (x, y, z, theta)
+        self.vision_msg.data = [250, 250, 100, 0, 15, # pick : (x, y, z, theta, grip_size) 
+                                -250, 250, 100, 30 ] # place : (x, y, z, theta)
+
     def vision_test(self): 
         self.pub_vision.publish(self.vision_msg)
         print('vision topic')
@@ -34,9 +38,13 @@ class Robot_control:
         print('gui - start')
 
     def init_pos(self):
-        self.gui_msg.data = "gui_init_pose"
-        self.pub_gui.publish(self.gui_msg)
-        print('gui - init_pos')
+        data = fl()
+        data.data = [-45, 50, 180, 0, 30]
+        self.goal_pose_test.publish(data)
+        print('goal_pos : ', data.data)
+        # self.gui_msg.data = "gui_init_pose"
+        # self.pub_gui.publish(self.gui_msg)
+        # print('gui - init_pos')
 
     def stop(self):
         self.gui_msg.data = "gui_stop"
@@ -105,7 +113,7 @@ def main_screen():
         ("새 Task 정의", open_task_definition),
         ("Task 불러오기", lambda: None),
         ("종료", confirm_exit),
-        ("초기 위치", robot_arm.init_pos),
+        ("초기 위치(goal_pos)", robot_arm.init_pos),
         ("일시 정지", robot_arm.pause),
         ("impact_test(로봇 정보)", robot_arm.impact_test),
         ("vision_data(개발자 정보)", robot_arm.vision_test), # 테스트용
