@@ -386,7 +386,7 @@ class Pose:
         # self.trajectory = np.append(self.trajectory, cubic_trajectory(self.last_pose, self.goal_pose))
         
     def callback_grip(self, msg):
-        self.grip_seperation = msg.msg
+        self.grip_seperation = msg.data
         goal_grip_seperation = self.gripper_close - (self.grip_seperation - self.gripper_close_mm) * self.seperation_per_mm
         
         # linear traj
