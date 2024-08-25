@@ -14,7 +14,7 @@ from ikpy.link import OriginLink, URDFLink
 def dtr(dgree):
    return dgree*(np.pi/180)
 
-l = [50, 65.95, 332.5, 270.2, 81.75, 17.25+132.47]
+l = [50, 65.95, 332.5, 270.2, 81.75, 17.25+132.47-6]
 
 d = [l[0], l[1], 0, 0, 0]
 a = [0, 0, l[2], l[3], l[4]+l[5]]
@@ -74,8 +74,8 @@ class FSM:
         self.arm = MakeChain()
 
         # fixed pose
-        self.parking = np.array([-90, 100, -125, -70, 0]) # parking 자세 설계팀과 상의 필요 # 각도값 조절 필요, 일단 카메라 포즈랑 동일하게 해둠
-        self.init_pose = np.array([0, 90, -90, -40, 0]) # 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
+        self.parking = np.array([0, 150, -90, -110, 0])# parking 자세 설계팀과 상의 필요 # 각도값 조절 필요, 일단 카메라 포즈랑 동일하게 해둠
+        self.init_pose = np.array([0, 150, -90, -110, 0])# 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
         
         # offset parameter
         self.above_offset = np.array([0, 0, 120, 0])
@@ -194,15 +194,16 @@ class FSM:
         print('\nCurrent state:', self.current_state, '(index:', current_state_index, end=')')
 
         if current_state_index == self.action_num-1: # place_offset(마지막)인 경우 init_pos로 이동 // init_pos로 이동 시 state_done topic이 와도 다음 동작으로 넘어가지 않음. 다시 vision topic 올때 까지 기다림
-            print("Pick and place 완료")
+            
             self.last_state = self.current_state
             self.current_state = self.action_list[0] # init_pose로 이동
             print(' --> Next state:', self.current_state)
             self.update()
-
+            
             msg = Bool()
             msg.data = True
             self.pub_pnp_done.publish(msg) 
+            print("Pick and place 완료")
 
         else:
             self.last_state = self.current_state
@@ -313,6 +314,7 @@ class Callback:
             self.soomac_fsm.start()
 
         elif data.data == "init_pose" :
+            print('******* init_pose')
             self.soomac_fsm.move_to_init()
 
         elif data.data == "stop" or data.data == "pause" :
@@ -321,14 +323,19 @@ class Callback:
             msg.data = "stop"
             self.soomac_fsm.pub_task_motor.publish(msg)
             print(msg.data)
-            while self.soomac_fsm.task_done == False :
-                time.sleep(0.1)
         
         elif data.data == "previous" :
-
+            print('******* previous')
             if self.soomac_fsm.current_state != self.soomac_fsm.last_state: 
                 print('moving to previous state\n')
+                print('이동 지점 : ', self.soomac_fsm.current_state)
+                print('출발 지점(previous 지점) : ', self.soomac_fsm.last_state)
+                
                 self.soomac_fsm.current_state = self.soomac_fsm.last_state
+                msg = String()
+                msg.data = "previous"
+                self.soomac_fsm.pub_task_motor.publish(msg)
+                # rospy.sleep(0.1) ######### **********        
                 self.soomac_fsm.update()
             else :
                 print('already initial pose\n')
