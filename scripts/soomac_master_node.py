@@ -67,21 +67,23 @@ class FSM:
         # initial setting
         self.state_done = False
         self.task_done = False
-        self.grip_open = 49
+        self.grip_open = 45
         self.grip_seperation = self.grip_open
-        self.current_state = "init_pose"
-        self.last_state = "init_pose"
+        self.current_state = "define_pose"
+        self.last_state = "define_pose"
         self.arm = MakeChain()
 
-        # fixed pose
+        # fixed pose(degree)
         self.parking = np.array([0, 150, -90, -110, 0])# parking 자세 설계팀과 상의 필요 # 각도값 조절 필요, 일단 카메라 포즈랑 동일하게 해둠
-        self.init_pose = np.array([0, 150, -90, -110, 0])# 초기 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
-        
+        self.define_pose = np.array([0, 150, -90, -110, 0])# task 정의 자세 # GUI에서 실행 버튼 및 초기 위치 버튼 누르면 여기로 이동함
+        self.camera_pose = np.array([0, 200, 120, 0])
+
         # offset parameter
         self.above_offset = np.array([0, 0, 120, 0])
-        self.grip_offset = np.array([0, 0, 30, 0])
+        self.grip_offset = np.array([0, 0, 10, 0])
         self.lift_offset = np.array([0, 0, 150, 0])
         self.object_size = None
+
 
         # 변수 사전 선언 // [0,0,0]으로 좌표 설정 시 해당 위치로 이동하라는 신호가 오면 base로 endpoint가 위치하려 하는 상황이 생기므로 초기값은 안전하게 설정함.
         self.pick_pose = [150, 0, 100, 0]
@@ -89,41 +91,40 @@ class FSM:
         self.action_setting()
 
         # action 정의
-        self.action_list =["init_pose" ,                           # 고정된 위치 동작
+        self.action_list =["define_pose" , "camera_pose",                         # 고정된 위치 동작
                            "pick_above" , "pick_grip" , "grip_on" , "pick_lift",  # pick zone 동작 
-                           "place_above", "place_grip", "grip_off", "place_lift", # place zone 동작
-                           "init_pose"] 
+                           "place_above", "place_grip", "grip_off", "place_lift"] # place zone 동작
+                            
         self.action_num = len(self.action_list)
 
         # ROS publish
         # master to motor_control
-        self.pub_goal_pose = rospy.Publisher('goal_pose', fl, queue_size=10)                  # pose 제어
-        self.pub_grip_seperation = rospy.Publisher('grip_seperation', Float32, queue_size=10) # grip 제어 
-        self.pub_task_motor = rospy.Publisher('task_to_motor_control', String, queue_size=10) # GUI 명령 하달
-        self.pub_start = rospy.Publisher('start', Bool, queue_size=10)                        # GUI 명령 하달
+        self.pub_goal_pose = rospy.Publisher('/goal_pose', fl, queue_size=10)                  # pose 제어
+        self.pub_grip_seperation = rospy.Publisher('/grip_seperation', Float32, queue_size=10) # grip 제어 
+        self.pub_task_motor = rospy.Publisher('/task_to_motor_control', String, queue_size=10) # GUI 명령 하달
+        self.pub_start = rospy.Publisher('/start', fl, queue_size=10)                        # GUI 명령 하달
         
-        # master to GUI
-        self.pub_task_gui = rospy.Publisher('input_task', String, queue_size=10)
-
         # master to vision
-        self.pub_pnp_done = rospy.Publisher('pnp_done', Bool, queue_size=10) 
-        
+        self.camera_ready = rospy.Publisher('/camera_ready', Bool, queue_size=10)
+
+        # master to GUI
+        self.define_ready = rospy.Publisher('/define_ready', Bool, queue_size=10)         
 
 
     ######################################################################################################
     def start(self): # init pose로 direct 이동, GUI에서 초기 위치 누르면 해당 메서드 동작 ********************************************
-        print('\n---------------- Started! Moving to initial pose ----------------')
-        msg = Bool()
-        msg.data = True
+        print('\n---------------- Started! Moving to define_pose pose ----------------')
+        msg = fl()
+        msg.data = self.define_pose
         self.pub_start.publish(msg)
-        self.current_state = "init_pose"
+        self.current_state = "define_pose"
 
-    def move_to_init(self): # init pose로 direct 이동, GUI에서 초기 위치 누르면 해당 메서드 동작
-        print('\nMoving to initial pose')
+    def move_to_camera(self): # camera pose로 direct 이동, GUI에서 camera 위치 누르면 해당 메서드 동작
+        print('\nMoving to camera pose')
         msg = String()
-        msg.data = "initial"
+        msg.data = "camera"
         self.pub_task_motor.publish(msg)
-        self.current_state = "init_pose"
+        # self.current_state = "camera_pose"
 
     def action_setting(self, print_op=False): # vision으로 부터 받은 정보를 바탕으로 way point의 좌표 정보 제작
         # pick zone
@@ -196,14 +197,12 @@ class FSM:
         if current_state_index == self.action_num-1: # place_offset(마지막)인 경우 init_pos로 이동 // init_pos로 이동 시 state_done topic이 와도 다음 동작으로 넘어가지 않음. 다시 vision topic 올때 까지 기다림
             
             self.last_state = self.current_state
-            self.current_state = self.action_list[0] # init_pose로 이동
+            self.current_state = self.action_list[1] # camera_pose로 이동
             print(' --> Next state:', self.current_state)
             self.update()
-            
-            msg = Bool()
-            msg.data = True
-            self.pub_pnp_done.publish(msg) 
+
             print("Pick and place 완료")
+
 
         else:
             self.last_state = self.current_state
@@ -212,10 +211,14 @@ class FSM:
             self.update()
 
     def update(self): #new_state로부터 갱신된 동작을 진행
-        # init
-        if self.current_state == "init_pose":            
-            self.pub_pose(self.init_pose, 1) # option 1
-            print('updated to init_pose')
+        # camera
+        if self.current_state == "define_pose":
+            self.pub_pose(self.camera_pose, 1) # option 1
+            print('updated to define_pose')            
+
+        elif self.current_state == "camera_pose":            
+            self.pub_pose(self.camera_pose, 3) # option 3
+            print('updated to camera_pose')
             
         # pick 
         elif self.current_state == "pick_above":
@@ -262,11 +265,16 @@ class FSM:
             self.goal_degree = self.arm.IK(goal_pose)
             print('-- goal pose (%.1f %.1f %.1f %.1f)' % (goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3]))
         
-        elif option == 1 : #사진 촬영 Pose(init_pose)
-            self.goal_degree = self.init_pose
+        elif option == 1 : # define Pose(init_pose)
+            self.goal_degree = self.define_pose
 
         elif option == 2 : #거치대 Pose
             self.goal_degree = self.parking
+
+        elif option == 3 : # twist 각도 보존 (camera pose용)
+            self.goal_degree = self.arm.IK(goal_pose)
+            print('-- goal pose (%.1f %.1f %.1f %.1f)' % (goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3]))
+            self.goal_degree[4] = goal_pose[3]
 
         goal_msg = fl() 
         goal_msg.data = self.goal_degree
@@ -292,20 +300,27 @@ class Callback:
     def ros_sub(self): # main_loop
 
         # vision to master
-        rospy.Subscriber('vision', fl, self.vision)         
+        rospy.Subscriber('/vision', fl, self.vision)         
+        rospy.Subscriber('/camera_pose', Bool, self.move_to_camera_cb)
 
         # GUI to master
-        rospy.Subscriber('task_type', String, self.task_type)
+        rospy.Subscriber('/task_type', String, self.task_type)
 
         # motor_control to master
-        rospy.Subscriber('state_done', Bool, self.state_done)
-        rospy.Subscriber('task_done', Bool, self.task_done)
-        rospy.Subscriber('impact_feedback', Bool, self.impact) 
+        rospy.Subscriber('/state_done', Bool, self.state_done)
+        rospy.Subscriber('/task_done', Bool, self.task_done)
         rospy.spin()
 
     def vision(self, data): # camera -> 동작
-        print('\nSubscribed vision topic\n: object initial pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°), object size({:.1f}), goal pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°)'.format(*data.data))
-        self.soomac_fsm.get_data_from_vision(data.data)
+        if self.soomac_fsm.current_state == "camera_pose":
+            print('\nSubscribed vision topic\n: object initial pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°), object size({:.1f}), goal pos({:.1f} {:.1f} {:.1f}) ori({:.1f}°)'.format(*data.data))
+            self.soomac_fsm.get_data_from_vision(data.data)
+        else:
+            print("잘못된 자세입니다.")
+
+    def move_to_camera_cb(self, data):
+        self.soomac_fsm.current_state = "camera_pose"
+        self.soomac_fsm.update()
 
     def task_type(self, data): # gui로 부터 task받을 시 동작 메서드
         #rospy.loginfo(f'Subscribed {data.data} topic')
@@ -313,9 +328,11 @@ class Callback:
         if data.data == "start" : # 주차(or 어디든) -> init # 초가 주차 상태일 때 누르면 init으로 옴
             self.soomac_fsm.start()
 
-        elif data.data == "init_pose" :
-            print('******* init_pose')
-            self.soomac_fsm.move_to_init()
+        elif data.data == "camera_pose" :
+            print('******* camera_pose')
+
+            self.soomac_fsm.move_to_camera()
+            self.move_to_camera_cb(None)
 
         elif data.data == "stop" or data.data == "pause" :
             
@@ -348,20 +365,27 @@ class Callback:
 
     def state_done(self, data): # motor_control로 부터 state_done 받을 시 동작 메서드
         # print('test')
-        if self.soomac_fsm.current_state != "init_pose": # init_pose로 이동 완료된 상황에서는 new_state안하고 vision 정보 기다림
+        if self.soomac_fsm.current_state != "camera_pose" and self.soomac_fsm.current_state != "define_pose": # init_pose로 이동 완료된 상황에서는 new_state안하고 vision 정보 기다림
             print('state_done\n')
             self.soomac_fsm.new_state()
+
+        elif self.soomac_fsm.current_state == "camera_pose": # camera pose로 이동 완료 시
+            print('ready to camera')
+            msg = Bool()
+            msg.data = True
+            self.soomac_fsm.camera_ready.publish(msg) # to vision
+
+        elif self.soomac_fsm.current_state == "define_pose":
+            print('ready to define')
+            msg = Bool()
+            msg.data = True
+            self.soomac_fsm.define_ready.publish(msg) # to GUI
 
     # 추후 코드 수정 필요
     def task_done(self): # motor_control에서 주어진 명령 수행 완료 시
         print('subscribed task_done topic')
         self.soomac_fsm.task_done = True
         
-    def impact(self, msg): # impact 시 GUI로 알림
-        print('Impact detected! Freezing for 10s')
-        msg = String()
-        msg.data = "impact"
-        self.soomac_fsm.pub_task_gui.publish(msg)
 
 #####################################################################################################################################################################################
 
